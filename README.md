@@ -55,14 +55,15 @@ That's it — the whole app runs from static files.
 
 1. Record or obtain bugle call audio you have the right to use (see
    Licensing below).
-2. Save each recording as an MP3 using the exact file name expected by the
-   page. The required file names are listed in `audio/README.txt`, for
-   example:
-   * `first-call.mp3`
-   * `reveille.mp3`
-   * `taps.mp3`
+2. Save each recording as an MP3 (preferred) or WAV file, using the exact
+   file name expected by the page. The required base names are listed in
+   `audio/README.txt`, for example:
+   * `first-call.mp3` (or `first-call.wav`)
+   * `reveille.mp3` (or `reveille.wav`)
+   * `taps.mp3` (or `taps.wav`)
    * ...and so on for all 15 calls.
-3. Copy the files into the `audio/` folder.
+3. Copy the files into the `audio/` folder. If both an MP3 and a WAV exist
+   for the same call, the MP3 is used automatically.
 4. Reload the page — clicking "Practice This Call" on each card will start
    playing that recording in the practice modal automatically. Calls
    without a matching file will keep showing "Audio recording not yet

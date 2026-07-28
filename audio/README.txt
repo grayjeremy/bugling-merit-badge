@@ -2,23 +2,25 @@ AUDIO FILES
 ===========
 
 Place bugle call recordings in this folder using exactly these file names
-(the web page looks for these names automatically):
+(the web page looks for these names automatically). MP3 is preferred; if
+an MP3 is missing for a call, the page automatically falls back to a WAV
+file with the same base name.
 
-  first-call.mp3
-  reveille.mp3
-  assembly.mp3
-  mess.mp3
-  drill.mp3
-  fatigue.mp3
-  officers.mp3
-  recall.mp3
-  church.mp3
-  swimming.mp3
-  fire.mp3
-  retreat.mp3
-  to-the-colors.mp3
-  call-to-quarters.mp3
-  taps.mp3
+  first-call.mp3  (or first-call.wav)
+  reveille.mp3    (or reveille.wav)
+  assembly.mp3    (or assembly.wav)
+  mess.mp3        (or mess.wav)
+  drill.mp3       (or drill.wav)
+  fatigue.mp3     (or fatigue.wav)
+  officers.mp3    (or officers.wav)
+  recall.mp3      (or recall.wav)
+  church.mp3      (or church.wav)
+  swimming.mp3    (or swimming.wav)
+  fire.mp3        (or fire.wav)
+  retreat.mp3     (or retreat.wav)
+  to-the-colors.mp3     (or to-the-colors.wav)
+  call-to-quarters.mp3  (or call-to-quarters.wav)
+  taps.mp3        (or taps.wav)
 
 IMPORTANT - LICENSING
 ----------------------

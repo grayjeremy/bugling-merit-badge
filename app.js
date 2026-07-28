@@ -18,8 +18,9 @@
      1. BUGLE CALL DATA
      Edit this array to change call names, descriptions, or audio file names.
      `id` must stay unique and is used as the localStorage key + audio file
-     base name (id + ".mp3" inside the audio/ folder) and the sheet music
-     image file base name. For images, an SVG (id + ".svg") is used first if
+     base name and the sheet music image file base name. For audio, an MP3
+     (id + ".mp3") is used first if present; otherwise the app falls back to
+     a WAV (id + ".wav"). For images, an SVG (id + ".svg") is used first if
      present; otherwise the app falls back to a PNG (id + ".png").
      ------------------------------------------------------------------------ */
   var BUGLE_CALLS = [
@@ -363,7 +364,8 @@
   function buildAudioControl(call, container) {
     container.innerHTML = "";
 
-    var audioSrc = "audio/" + call.id + ".mp3";
+    var mp3Src = "audio/" + call.id + ".mp3";
+    var wavSrc = "audio/" + call.id + ".wav";
     var audio = document.createElement("audio");
     audio.controls = true;
     // "metadata" (instead of "none") makes the browser check the file right
@@ -377,15 +379,23 @@
     missingMsg.textContent = "Audio recording not yet available.";
     missingMsg.hidden = true;
 
-    var source = document.createElement("source");
-    source.src = audioSrc;
-    source.type = "audio/mpeg";
-    audio.appendChild(source);
+    // The browser tries each <source> in order and uses the first one that
+    // loads, so listing MP3 before WAV means MP3 is preferred when both
+    // exist, with WAV used automatically as a fallback.
+    var mp3Source = document.createElement("source");
+    mp3Source.src = mp3Src;
+    mp3Source.type = "audio/mpeg";
+    audio.appendChild(mp3Source);
 
-    // If the audio file is missing (404, or file doesn't exist when opened
-    // directly from disk), the browser fires an "error" event on the
-    // <audio> or <source> element. We catch that and show a friendly
-    // message instead of a broken player.
+    var wavSource = document.createElement("source");
+    wavSource.src = wavSrc;
+    wavSource.type = "audio/wav";
+    audio.appendChild(wavSource);
+
+    // If none of the sources are available (404, or files don't exist when
+    // opened directly from disk), the browser fires an "error" event on the
+    // <audio> element. We catch that and show a friendly message instead of
+    // a broken player.
     audio.addEventListener("error", showMissingAudio, true);
 
     function showMissingAudio() {
