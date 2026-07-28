@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN"
+"http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0">
+  <work><work-title>Drill Call</work-title></work>
+  <identification>
+    <encoding>
+      <software>OpenAI draft transcription</software>
+    </encoding>
+  </identification>
+  <part-list>
+    <score-part id="P1"><part-name>Bugle</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>8</divisions>
+        <key><fifths>0</fifths></key>
+        <time><beats>2</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <direction placement="above">
+        <direction-type>
+          <words>Quick</words>
+        </direction-type>
+      </direction>
+      <direction>
+        <direction-type>
+          <metronome>
+            <beat-unit>quarter</beat-unit>
+            <per-minute>144</per-minute>
+          </metronome>
+        </direction-type>
+      </direction>
+      <direction placement="below">
+        <direction-type><dynamics><f/></dynamics></direction-type>
+      </direction>
+    </measure>
+    <!-- NOTE:
+         This file is a placeholder shell only.
+         The supplied image resolution is still insufficient to
+         produce an exact note-for-note MusicXML transcription
+         without risking transcription errors.
+    -->
+  </part>
+</score-partwise>
