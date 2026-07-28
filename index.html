@@ -77,13 +77,38 @@
       <input type="search" id="search-input" placeholder="e.g. Reveille">
     </div>
     <div class="expand-controls">
-      <button type="button" id="expand-all-btn">Expand All</button>
-      <button type="button" id="collapse-all-btn">Collapse All</button>
+      <button type="button" id="expand-all-btn" class="icon-btn" aria-label="Expand All" title="Expand All">
+        <span class="icon-symbol" aria-hidden="true">+</span>
+      </button>
+      <button type="button" id="collapse-all-btn" class="icon-btn" aria-label="Collapse All" title="Collapse All">
+        <span class="icon-symbol" aria-hidden="true">&minus;</span>
+      </button>
+      <button
+        type="button"
+        id="print-music-btn"
+        class="icon-btn"
+        aria-label="Print sheet music for the calls currently shown"
+        title="Print sheet music for the calls currently shown"
+      >
+        <svg
+          class="icon-symbol"
+          aria-hidden="true"
+          viewBox="0 0 24 24"
+          width="20"
+          height="20"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="6 9 6 2 18 2 18 9"></polyline>
+          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+          <rect x="6" y="14" width="12" height="8"></rect>
+        </svg>
+      </button>
     </div>
-    <div class="print-music-row">
-      <button type="button" id="print-music-btn" class="btn-secondary">Print Sheet Music (Currently Shown Calls)</button>
-      <p class="print-music-help">Prints or saves a PDF of the sheet music for whichever calls match your current filter and search, so you can practice offline.</p>
-    </div>
+    <p class="print-music-help visually-hidden">Prints or saves a PDF of the sheet music for whichever calls match your current filter and search, so you can practice offline.</p>
   </section>
 
   <!-- Bugle Call Cards -->

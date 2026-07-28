@@ -330,6 +330,29 @@ textarea:focus {
   background: var(--color-cream-alt);
 }
 
+/* Square icon buttons (Expand All / Collapse All / Print Sheet Music) share
+   a consistent, easy-to-tap size with a centered icon and no visible text
+   label. Each button still has an accessible name via aria-label/title. */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  line-height: 1;
+}
+
+.icon-btn .icon-symbol {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.icon-btn svg.icon-symbol {
+  width: 20px;
+  height: 20px;
+}
+
 /* ==========================================================================
    Buttons (generic)
    ========================================================================== */
@@ -385,16 +408,9 @@ textarea:focus {
   cursor: not-allowed;
 }
 
-.print-music-row {
-  margin-top: 0.9rem;
-  padding-top: 0.9rem;
-  border-top: 1px solid var(--color-border);
-}
-
-.print-music-help {
-  margin: 0.5rem 0 0 0;
-  font-size: 0.9rem;
-  color: var(--color-text-muted);
+.icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ==========================================================================
