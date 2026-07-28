@@ -608,6 +608,37 @@ textarea:focus {
   font-size: 0.85rem;
 }
 
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem 1.1rem;
+  margin-top: 0.6rem;
+}
+
+.footer-copilot-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--color-text-muted);
+}
+
+.footer-copilot-icon {
+  color: var(--color-forest);
+  flex-shrink: 0;
+}
+
+.footer-links a {
+  color: var(--color-forest);
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.footer-links a:hover {
+  color: var(--color-navy);
+}
+
 /* ==========================================================================
    Practice modal (sheet music + audio for one call)
    ========================================================================== */

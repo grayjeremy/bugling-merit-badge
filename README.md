@@ -143,6 +143,15 @@ If you are not sure whether a recording is safe to use, it's best to record
 your own or leave that call's audio file out — the site handles missing
 audio gracefully.
 
+## Credits
+
+The footer includes a "Made with GitHub Copilot" badge using the "Copilot"
+icon from GitHub's open-source [Primer Octicons](https://github.com/primer/octicons)
+set, which is available under the MIT License. GitHub's Copilot brand
+artwork and trademarks are not reproduced here; see
+[GitHub's brand guidelines](https://brand.github.com/brand-identity/copilot)
+for details on GitHub's official Copilot branding.
+
 The same rules apply to sheet music images added to the `images/` folder:
 only use public domain, original, or properly licensed sheet music.
 
