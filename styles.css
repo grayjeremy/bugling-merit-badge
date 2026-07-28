@@ -365,6 +365,38 @@ textarea:focus {
   color: #fff;
 }
 
+.btn-secondary {
+  font: inherit;
+  padding: 0.7rem 1.4rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-gold);
+  background: #fff;
+  color: var(--color-navy);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  background: var(--color-cream-alt);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.print-music-row {
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.print-music-help {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
 /* ==========================================================================
    Bugle Call Cards
    ========================================================================== */
@@ -786,11 +818,12 @@ body.modal-open {
    ========================================================================== */
 
 @media print {
-  /* Hide everything on the page except the print sign-off sheet. Using
+  /* Hide everything on the page except whichever printable sheet was just
+     activated by JS (the sign-off sheet or the sheet music packet). Using
      display: none (rather than visibility: hidden) removes the hidden
      elements from the page layout entirely, so their height doesn't push
      the sheet onto extra blank pages. */
-  body > *:not(#print-sheet) {
+  body > *:not(.print-active) {
     display: none !important;
   }
 
@@ -798,17 +831,17 @@ body.modal-open {
     display: none !important;
   }
 
-  #print-sheet {
-    display: block;
+  .print-active {
+    display: block !important;
     width: 100%;
     color: #000;
     background: #fff;
     font-family: Georgia, serif;
     font-size: 11px;
-    padding: 0.3in 0.35in;
+    padding: 0.35in 0.35in 0.3in 0.35in;
   }
 
-  #print-sheet h1 {
+  .print-active h1 {
     color: #000;
     font-size: 15px;
     text-align: center;
@@ -895,8 +928,49 @@ body.modal-open {
     font-size: 10px;
   }
 
+  /* Sheet music packet layout */
+  .print-music-subheading {
+    text-align: center;
+    font-size: 11px;
+    margin: 0 0 0.6rem 0;
+  }
+
+  .print-music-item {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    margin-bottom: 0.6rem;
+    border-bottom: 1px solid #000;
+    padding-bottom: 0.4rem;
+  }
+
+  .print-music-item h2 {
+    font-size: 13px;
+    margin: 0 0 0.15rem 0;
+  }
+
+  .print-music-purpose {
+    font-size: 10.5px;
+    margin: 0 0 0.3rem 0;
+  }
+
+  .print-music-img {
+    display: block;
+    max-width: 100%;
+    max-height: 4.2in;
+    margin: 0 auto;
+  }
+
+  .print-music-missing {
+    font-style: italic;
+    font-size: 10.5px;
+  }
+
   @page {
     size: letter portrait;
-    margin: 0.35in;
+    /* A near-zero top margin gives Chrome no room to draw its default
+       print header (title/URL), while the normal bottom margin leaves
+       room for the default footer (date/page number) to still show.
+       Content padding below adds back visual breathing room at the top. */
+    margin: 0.06in 0.35in 0.35in 0.35in;
   }
 }
