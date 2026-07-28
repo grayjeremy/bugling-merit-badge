@@ -80,6 +80,10 @@
       <button type="button" id="expand-all-btn">Expand All</button>
       <button type="button" id="collapse-all-btn">Collapse All</button>
     </div>
+    <div class="print-music-row">
+      <button type="button" id="print-music-btn" class="btn-secondary">Print Sheet Music (Currently Shown Calls)</button>
+      <p class="print-music-help">Prints or saves a PDF of the sheet music for whichever calls match your current filter and search, so you can practice offline.</p>
+    </div>
   </section>
 
   <!-- Bugle Call Cards -->
@@ -165,6 +169,9 @@
     </div>
   </div>
 </div>
+
+<!-- Printable Sheet Music Packet (only shown when printing; content built by JS) -->
+<div id="print-music-sheet" class="print-only"></div>
 
 <footer class="site-footer no-print">
   <p>Bugling Merit Badge Practice &mdash; a fan-made study tool. Not an official Scouting America publication.</p>

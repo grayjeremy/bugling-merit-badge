@@ -126,6 +126,23 @@ column for the counselor to write in their initials by hand.
   as the destination/printer in that dialog instead of a physical printer.
 * To get a paper copy, just choose your printer as usual.
 
+## Printing a sheet music practice packet
+
+Click the **"Print Sheet Music (Currently Shown Calls)"** button near the
+filter and search controls to print (or save as a PDF) a packet containing
+the sheet music image for every call that currently matches your active
+filter and search — so a Scout can print just the calls they're working on,
+or clear the filter/search first to print all 15.
+
+* Each call in the packet shows its name and purpose above the sheet music
+  image, using the same SVG-preferred/PNG-fallback image logic as the
+  on-screen cards and the practice modal.
+* If a call doesn't have a sheet music image yet, the packet prints a
+  friendly "Sheet music not yet available for this call" message instead of
+  a broken image.
+* If no calls match the current filter/search, the button shows an alert
+  instead of printing an empty page.
+
 ## Licensing for audio recordings
 
 Do not embed, download, or distribute copyrighted bugle call recordings

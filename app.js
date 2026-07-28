@@ -222,11 +222,14 @@
     expandAllBtn: document.getElementById("expand-all-btn"),
     collapseAllBtn: document.getElementById("collapse-all-btn"),
     printBtn: document.getElementById("print-btn"),
+    printSheet: document.getElementById("print-sheet"),
     printTableBody: document.getElementById("print-table-body"),
     printScoutName: document.getElementById("print-scout-name"),
     printUnitNumber: document.getElementById("print-unit-number"),
     printCounselorName: document.getElementById("print-counselor-name"),
     printDateStarted: document.getElementById("print-date-started"),
+    printMusicBtn: document.getElementById("print-music-btn"),
+    printMusicSheet: document.getElementById("print-music-sheet"),
     resetBtn: document.getElementById("reset-btn"),
     practiceModalOverlay: document.getElementById("practice-modal-overlay"),
     practiceModal: document.getElementById("practice-modal"),
@@ -701,7 +704,114 @@
   function initPrintButton() {
     els.printBtn.addEventListener("click", function () {
       updatePrintHeaderInfo();
+      els.printMusicSheet.classList.remove("print-active");
+      els.printSheet.classList.add("print-active");
       window.print();
+      els.printSheet.classList.remove("print-active");
+    });
+  }
+
+  /* ------------------------------------------------------------------------
+     8b. PRINTABLE SHEET MUSIC PACKET (currently filtered/searched calls)
+     ------------------------------------------------------------------------ */
+
+  // Builds the hidden print-only sheet music packet for the given calls and
+  // returns a Promise that resolves once every image has finished loading
+  // (or failed and shown its "not available" message), so printing doesn't
+  // start before the pictures are ready.
+  function buildPrintMusicSheet(calls) {
+    var container = els.printMusicSheet;
+    container.innerHTML = "";
+
+    var heading = document.createElement("h1");
+    heading.textContent = "Bugling Merit Badge — Sheet Music Packet";
+    container.appendChild(heading);
+
+    var subheading = document.createElement("p");
+    subheading.className = "print-music-subheading";
+    subheading.textContent =
+      calls.length + " of " + BUGLE_CALLS.length +
+      " calls included, based on the filter and search that were active when you printed.";
+    container.appendChild(subheading);
+
+    var loadPromises = calls.map(function (call) {
+      var item = document.createElement("div");
+      item.className = "print-music-item";
+
+      var title = document.createElement("h2");
+      title.textContent = call.number + ". " + call.name;
+      item.appendChild(title);
+
+      var purpose = document.createElement("p");
+      purpose.className = "print-music-purpose";
+      purpose.textContent = call.purpose;
+      item.appendChild(purpose);
+
+      var img = document.createElement("img");
+      img.className = "print-music-img";
+      img.alt = call.name + " sheet music";
+      img.hidden = true;
+
+      var missingMsg = document.createElement("p");
+      missingMsg.className = "print-music-missing";
+      missingMsg.textContent = "Sheet music not yet available for this call.";
+      missingMsg.hidden = true;
+
+      item.appendChild(img);
+      item.appendChild(missingMsg);
+      container.appendChild(item);
+
+      return new Promise(function (resolve) {
+        // Prefer an SVG version of the sheet music; fall back to PNG, then
+        // to the "not yet available" message — same pattern used by the
+        // practice modal's sheet music display.
+        var triedPngFallback = false;
+        img.addEventListener("load", function () {
+          img.hidden = false;
+          resolve();
+        });
+        img.addEventListener("error", function () {
+          if (!triedPngFallback) {
+            triedPngFallback = true;
+            img.src = "images/" + call.id + ".png";
+            return;
+          }
+          img.hidden = true;
+          missingMsg.hidden = false;
+          resolve();
+        });
+        img.src = "images/" + call.id + ".svg";
+      });
+    });
+
+    return Promise.all(loadPromises);
+  }
+
+  function initPrintMusicButton() {
+    els.printMusicBtn.addEventListener("click", function () {
+      // Only include calls that are currently visible under the active
+      // filter and search, matching what the Scout sees on screen.
+      var visibleCalls = BUGLE_CALLS.filter(function (call) {
+        var article = document.getElementById("card-" + call.id);
+        return article && !article.classList.contains("is-hidden");
+      });
+
+      if (visibleCalls.length === 0) {
+        window.alert(
+          "No bugle calls match your current filter and search, so there is " +
+          "nothing to print. Adjust the filter or search first."
+        );
+        return;
+      }
+
+      els.printMusicBtn.disabled = true;
+      buildPrintMusicSheet(visibleCalls).then(function () {
+        els.printSheet.classList.remove("print-active");
+        els.printMusicSheet.classList.add("print-active");
+        window.print();
+        els.printMusicSheet.classList.remove("print-active");
+        els.printMusicBtn.disabled = false;
+      });
     });
   }
 
@@ -758,6 +868,7 @@
     initExpandCollapseAll();
     initPracticeModal();
     initPrintButton();
+    initPrintMusicButton();
     initResetButton();
     renderEverything();
   }
