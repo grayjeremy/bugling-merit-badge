@@ -245,6 +245,12 @@
   var currentlyPlayingAudio = null;
   var practiceModalTriggerBtn = null;
 
+  // Cache of which sheet music image format is available for each call, so
+  // the print-music button can build its packet synchronously (see note
+  // above buildPrintMusicSheet for why this matters on iOS).
+  // Values: "svg", "png", "none", or undefined (not checked yet).
+  var sheetMusicAvailability = {};
+
   /* ------------------------------------------------------------------------
      4. RENDERING
      ------------------------------------------------------------------------ */
@@ -715,10 +721,42 @@
      8b. PRINTABLE SHEET MUSIC PACKET (currently filtered/searched calls)
      ------------------------------------------------------------------------ */
 
-  // Builds the hidden print-only sheet music packet for the given calls and
-  // returns a Promise that resolves once every image has finished loading
-  // (or failed and shown its "not available" message), so printing doesn't
-  // start before the pictures are ready.
+  // Quietly checks, in the background, which sheet music image format
+  // (SVG, PNG, or none) exists for every call, and caches the result in
+  // sheetMusicAvailability. This runs once during startup so that by the
+  // time a Scout taps "Print Sheet Music", the answer is already known and
+  // the print packet can be built synchronously.
+  //
+  // This matters because iOS (Safari/Edge/Chrome all use WebKit on iOS)
+  // only allows window.print() to open the print dialog when it is called
+  // *synchronously* inside the click event handler. Waiting on an image
+  // Promise before calling window.print() works fine on desktop browsers,
+  // but silently fails to open the print dialog on iPhone/iPad.
+  function preloadSheetMusicAvailability() {
+    BUGLE_CALLS.forEach(function (call) {
+      if (sheetMusicAvailability[call.id]) {
+        return; // already known
+      }
+      var probe = new Image();
+      var triedPngFallback = false;
+      probe.addEventListener("load", function () {
+        sheetMusicAvailability[call.id] = triedPngFallback ? "png" : "svg";
+      });
+      probe.addEventListener("error", function () {
+        if (!triedPngFallback) {
+          triedPngFallback = true;
+          probe.src = "images/" + call.id + ".png";
+          return;
+        }
+        sheetMusicAvailability[call.id] = "none";
+      });
+      probe.src = "images/" + call.id + ".svg";
+    });
+  }
+
+  // Builds the hidden print-only sheet music packet for the given calls.
+  // This is synchronous by design (see preloadSheetMusicAvailability above)
+  // so it can run in the same click handler that calls window.print().
   function buildPrintMusicSheet(calls) {
     var container = els.printMusicSheet;
     container.innerHTML = "";
@@ -734,7 +772,7 @@
       " calls included, based on the filter and search that were active when you printed.";
     container.appendChild(subheading);
 
-    var loadPromises = calls.map(function (call) {
+    calls.forEach(function (call) {
       var item = document.createElement("div");
       item.className = "print-music-item";
 
@@ -747,44 +785,26 @@
       purpose.textContent = call.purpose;
       item.appendChild(purpose);
 
-      var img = document.createElement("img");
-      img.className = "print-music-img";
-      img.alt = call.name + " sheet music";
-      img.hidden = true;
+      var availability = sheetMusicAvailability[call.id];
 
-      var missingMsg = document.createElement("p");
-      missingMsg.className = "print-music-missing";
-      missingMsg.textContent = "Sheet music not yet available for this call.";
-      missingMsg.hidden = true;
+      if (availability === "svg" || availability === "png") {
+        var img = document.createElement("img");
+        img.className = "print-music-img";
+        img.alt = call.name + " sheet music";
+        img.src = "images/" + call.id + "." + availability;
+        item.appendChild(img);
+      } else {
+        // Covers both the confirmed "none" case and the rare case where
+        // the background check hasn't finished yet — showing this message
+        // is safer than risking a broken image in the print dialog.
+        var missingMsg = document.createElement("p");
+        missingMsg.className = "print-music-missing";
+        missingMsg.textContent = "Sheet music not yet available for this call.";
+        item.appendChild(missingMsg);
+      }
 
-      item.appendChild(img);
-      item.appendChild(missingMsg);
       container.appendChild(item);
-
-      return new Promise(function (resolve) {
-        // Prefer an SVG version of the sheet music; fall back to PNG, then
-        // to the "not yet available" message — same pattern used by the
-        // practice modal's sheet music display.
-        var triedPngFallback = false;
-        img.addEventListener("load", function () {
-          img.hidden = false;
-          resolve();
-        });
-        img.addEventListener("error", function () {
-          if (!triedPngFallback) {
-            triedPngFallback = true;
-            img.src = "images/" + call.id + ".png";
-            return;
-          }
-          img.hidden = true;
-          missingMsg.hidden = false;
-          resolve();
-        });
-        img.src = "images/" + call.id + ".svg";
-      });
     });
-
-    return Promise.all(loadPromises);
   }
 
   function initPrintMusicButton() {
@@ -804,14 +824,14 @@
         return;
       }
 
-      els.printMusicBtn.disabled = true;
-      buildPrintMusicSheet(visibleCalls).then(function () {
-        els.printSheet.classList.remove("print-active");
-        els.printMusicSheet.classList.add("print-active");
-        window.print();
-        els.printMusicSheet.classList.remove("print-active");
-        els.printMusicBtn.disabled = false;
-      });
+      // Everything below must run synchronously (no waiting on Promises)
+      // so that window.print() stays inside this click event's user
+      // gesture — required for the print dialog to open on iOS.
+      buildPrintMusicSheet(visibleCalls);
+      els.printSheet.classList.remove("print-active");
+      els.printMusicSheet.classList.add("print-active");
+      window.print();
+      els.printMusicSheet.classList.remove("print-active");
     });
   }
 
@@ -870,6 +890,7 @@
     initPrintButton();
     initPrintMusicButton();
     initResetButton();
+    preloadSheetMusicAvailability();
     renderEverything();
   }
 
