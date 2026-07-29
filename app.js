@@ -625,11 +625,19 @@
     return /EdgiOS|CriOS|FxiOS|OPiOS|Brave|DuckDuckGo|GSA/.test(ua);
   }
 
+  // The PDF-download fallback is only needed on iOS/iPadOS browsers other
+  // than Safari, since Apple restricts window.print()'s print dialog to
+  // Safari itself there. Every other browser (desktop or mobile) spools
+  // to the printer normally via window.print().
+  function shouldUsePdfFallback() {
+    return isIOSNonSafariBrowser();
+  }
+
   // Relabels both print buttons (rather than leaving them saying "Print"
   // when window.print() won't work) so it's clear a PDF download will
   // happen instead of a print dialog opening.
   function relabelPrintButtonsIfPdfFallback() {
-    if (!isIOSNonSafariBrowser()) {
+    if (!shouldUsePdfFallback()) {
       return;
     }
     var explanation =
@@ -679,10 +687,72 @@
     return jsPdfLoadPromise;
   }
 
-  // Rasterizes an on-disk image (SVG or PNG) to a PNG data URL via a hidden
-  // canvas, so it can be embedded with jsPDF's addImage (which needs a
-  // raster format, not SVG). Resolves to null if the image can't be loaded.
-  function loadImageAsPngDataUrl(src) {
+  // Reads an already-loaded <img> element's natural size and hands back
+  // its data URI directly — no <canvas> involved. Loading an <img> from a
+  // data: URI never taints a canvas and never touches the network, so
+  // this works identically whether the page is served over http(s) or
+  // opened directly from disk via file://.
+  function dataUriToImageInfo(dataUri) {
+    return new Promise(function (resolve) {
+      var img = new Image();
+      img.addEventListener("load", function () {
+        resolve({
+          dataUrl: dataUri,
+          width: img.naturalWidth,
+          height: img.naturalHeight,
+          format: "PNG"
+        });
+      });
+      img.addEventListener("error", function () {
+        resolve(null);
+      });
+      img.src = dataUri;
+    });
+  }
+
+  var SHEET_MUSIC_DATA_SCRIPT_URL = "images/sheet-music-data.js";
+  var sheetMusicDataLoadPromise = null;
+
+  // Lazily loads images/sheet-music-data.js, a generated file (see
+  // tools/generate-sheet-music-data.py) containing every sheet music
+  // image pre-encoded as a true-color-RGB PNG data URI on
+  // window.BUGLE_SHEET_MUSIC_DATA. Loading it via a <script> tag (rather
+  // than fetch()) is deliberate: it works the same over http(s) and over
+  // file://, whereas fetch() of a local file is blocked outright in
+  // Chrome/Edge. Only loaded on demand, since it's ~1MB and most visitors
+  // never generate a PDF.
+  function loadSheetMusicData() {
+    if (window.BUGLE_SHEET_MUSIC_DATA) {
+      return Promise.resolve(window.BUGLE_SHEET_MUSIC_DATA);
+    }
+    if (sheetMusicDataLoadPromise) {
+      return sheetMusicDataLoadPromise;
+    }
+    sheetMusicDataLoadPromise = new Promise(function (resolve, reject) {
+      var script = document.createElement("script");
+      script.src = SHEET_MUSIC_DATA_SCRIPT_URL;
+      script.addEventListener("load", function () {
+        resolve(window.BUGLE_SHEET_MUSIC_DATA || {});
+      });
+      script.addEventListener("error", function () {
+        sheetMusicDataLoadPromise = null; // allow retrying on a later click
+        reject(new Error("Could not load the sheet music data file."));
+      });
+      document.head.appendChild(script);
+    });
+    return sheetMusicDataLoadPromise;
+  }
+
+  // Rasterizes an on-disk sheet music image to a PNG data URL via a
+  // hidden canvas. This is only a fallback for a call missing from
+  // images/sheet-music-data.js (e.g. a new image added without
+  // re-running the generator script yet) — it mishandles
+  // palette/indexed-color source PNGs (jsPDF's decoder renders black
+  // blocks for those) and fails outright under file:// (Chrome/Edge taint
+  // the canvas for any locally-loaded image there), so it should rarely
+  // be hit in practice. Resolves to null on any failure, in which case
+  // the PDF falls back to a "not available" message.
+  function loadImageAsDataUrl(src) {
     return new Promise(function (resolve) {
       var img = new Image();
       img.addEventListener("load", function () {
@@ -697,10 +767,11 @@
           resolve({
             dataUrl: canvas.toDataURL("image/png"),
             width: canvas.width,
-            height: canvas.height
+            height: canvas.height,
+            format: "PNG"
           });
         } catch (err) {
-          resolve(null); // e.g. canvas security error
+          resolve(null);
         }
       });
       img.addEventListener("error", function () {
@@ -720,7 +791,11 @@
   // images needed), mirroring the on-screen/print-CSS layout.
   function buildSignOffPdfDoc() {
     var JsPDF = window.jspdf.jsPDF;
-    var doc = new JsPDF({ unit: "in", format: "letter" });
+    var doc = new JsPDF({ unit: "in", format: "letter", compress: true });
+    // jsPDF's default line width is 0.200025 *in the document's own unit*
+    // (0.2in here), so every doc.line() below would otherwise draw a thick
+    // solid bar instead of a hairline rule — set a sane thin width instead.
+    doc.setLineWidth(0.01);
     var pageWidth = 8.5;
     var marginX = 0.6;
     var contentWidth = pageWidth - marginX * 2;
@@ -814,10 +889,20 @@
   // Builds the sheet music packet as a jsPDF document: one page per call,
   // with its name/purpose text plus its rasterized sheet music image
   // (images map is call.id -> {dataUrl, width, height} | null, preloaded
-  // via loadImageAsPngDataUrl before this is called).
+  // via loadImageAsDataUrl before this is called).
   function buildSheetMusicPdfDoc(calls, images) {
     var JsPDF = window.jspdf.jsPDF;
-    var doc = new JsPDF({ unit: "in", format: "letter" });
+    // compress: true is essential here — canvas-rasterized PNGs always
+    // include an alpha channel, which forces jsPDF onto a raw-pixel
+    // embedding path. Without compression that raw path stores 4
+    // uncompressed bytes per pixel (turning one sheet music image into
+    // several MB, and the whole packet into 40+ MB); with it, jsPDF
+    // deflates that raw data back down to a normal, small PNG-like size.
+    var doc = new JsPDF({ unit: "in", format: "letter", compress: true });
+    // jsPDF's default line width is 0.200025 *in the document's own unit*
+    // (0.2in here), so the divider line below would otherwise draw as a
+    // thick solid black bar instead of a hairline rule.
+    doc.setLineWidth(0.01);
     var pageWidth = 8.5;
     var pageHeight = 11;
     var marginX = 0.6;
@@ -887,7 +972,7 @@
 
       if (imgInfo) {
         var xIn = marginX + (contentWidth - imgWidth) / 2;
-        doc.addImage(imgInfo.dataUrl, "PNG", xIn, y, imgWidth, imgHeight);
+        doc.addImage(imgInfo.dataUrl, imgInfo.format || "PNG", xIn, y, imgWidth, imgHeight);
       } else {
         doc.setFont("times", "italic");
         doc.text("Sheet music not yet available for this call.", marginX, y);
@@ -948,15 +1033,41 @@
     });
   }
 
+  // Loads a call's sheet music image for the PDF. This deliberately does
+  // NOT trust the sheetMusicAvailability cache (populated in the
+  // background by preloadSheetMusicAvailability): if a Scout taps "Print
+  // Sheet Music" before that background probe has finished, the cache
+  // would still be undefined for every call, making the PDF wrongly show
+  // "not yet available" for images that do exist. Loading directly here
+  // removes that race entirely.
+  //
+  // sheetMusicData is the pre-baked map from images/sheet-music-data.js
+  // (call id -> true-color PNG data URI). Every current call should be
+  // in there; the canvas-based loadImageAsDataUrl is only a best-effort
+  // fallback for a call that isn't (e.g. a newly added image before
+  // tools/generate-sheet-music-data.py has been re-run), and won't work
+  // reliably under file:// — see loadImageAsDataUrl's comment.
+  function loadSheetMusicImageForPdf(callId, sheetMusicData) {
+    var dataUri = sheetMusicData && sheetMusicData[callId];
+    if (dataUri) {
+      return dataUriToImageInfo(dataUri);
+    }
+    return loadImageAsDataUrl("images/" + callId + ".svg").then(function (info) {
+      if (info) {
+        return info;
+      }
+      return loadImageAsDataUrl("images/" + callId + ".png");
+    });
+  }
+
   function downloadSheetMusicPdf(calls) {
     setButtonBusy(els.printMusicBtn, true);
-    loadJsPdfLibrary().then(function () {
+    Promise.all([loadJsPdfLibrary(), loadSheetMusicData().catch(function () {
+      return null; // fine to proceed without it; falls back per-call below
+    })]).then(function (loaded) {
+      var sheetMusicData = loaded[1];
       return Promise.all(calls.map(function (call) {
-        var availability = sheetMusicAvailability[call.id];
-        if (availability !== "svg" && availability !== "png") {
-          return { id: call.id, info: null };
-        }
-        return loadImageAsPngDataUrl("images/" + call.id + "." + availability).then(function (info) {
+        return loadSheetMusicImageForPdf(call.id, sheetMusicData).then(function (info) {
           return { id: call.id, info: info };
         });
       }));
@@ -1088,7 +1199,7 @@
       updatePrintHeaderInfo();
       // On iOS non-Safari browsers, window.print() silently does nothing
       // (see isIOSNonSafariBrowser above), so download a PDF instead.
-      if (isIOSNonSafariBrowser()) {
+      if (shouldUsePdfFallback()) {
         downloadSignOffPdf();
         return;
       }
@@ -1175,18 +1286,63 @@
         img.alt = call.name + " sheet music";
         img.src = "images/" + call.id + "." + availability;
         item.appendChild(img);
+      } else if (availability === "none") {
+        // Confirmed (by preloadSheetMusicAvailability) that no image
+        // exists for this call — no point trying to load one.
+        appendMissingSheetMusicMessage(item, call);
       } else {
-        // Covers both the confirmed "none" case and the rare case where
-        // the background check hasn't finished yet — showing this message
-        // is safer than risking a broken image in the print dialog.
-        var missingMsg = document.createElement("p");
-        missingMsg.className = "print-music-missing";
-        missingMsg.textContent = "Sheet music not yet available for this call.";
-        item.appendChild(missingMsg);
+        // The background availability check (preloadSheetMusicAvailability)
+        // hasn't finished yet for this call. Rather than assume it's
+        // missing (which would wrongly show "not yet available" for a
+        // call that does have an image — the exact bug this replaced),
+        // try loading it live here: SVG first, falling back to PNG, and
+        // only falling back to the "missing" message if both fail. The
+        // browser's print pipeline waits for in-flight <img> loads before
+        // rendering the printed page, so this resolves before printing
+        // completes even though it's technically async.
+        appendSheetMusicImageWithFallback(item, call);
       }
 
       container.appendChild(item);
     });
+  }
+
+  // Confirmed-missing message, factored out since it's used both for the
+  // "known absent" case and as the final fallback when live-loading an
+  // image (see appendSheetMusicImageWithFallback) fails on both formats.
+  function appendMissingSheetMusicMessage(item, call) {
+    var missingMsg = document.createElement("p");
+    missingMsg.className = "print-music-missing";
+    missingMsg.textContent = "Sheet music not yet available for this call.";
+    item.appendChild(missingMsg);
+  }
+
+  // Adds an <img> that tries images/<id>.svg first and falls back to
+  // images/<id>.png on error, replacing itself with the standard "missing"
+  // message if neither exists. Used when sheetMusicAvailability doesn't
+  // yet have an answer for this call (see buildPrintMusicSheet).
+  function appendSheetMusicImageWithFallback(item, call) {
+    var img = document.createElement("img");
+    img.className = "print-music-img";
+    img.alt = call.name + " sheet music";
+    var triedPngFallback = false;
+    img.addEventListener("load", function () {
+      sheetMusicAvailability[call.id] = triedPngFallback ? "png" : "svg";
+    });
+    img.addEventListener("error", function () {
+      if (!triedPngFallback) {
+        triedPngFallback = true;
+        img.src = "images/" + call.id + ".png";
+        return;
+      }
+      sheetMusicAvailability[call.id] = "none";
+      if (img.parentNode === item) {
+        item.removeChild(img);
+      }
+      appendMissingSheetMusicMessage(item, call);
+    });
+    img.src = "images/" + call.id + ".svg";
+    item.appendChild(img);
   }
 
   function initPrintMusicButton() {
@@ -1211,7 +1367,7 @@
       // gesture — required for the print dialog to open on iOS Safari.
       // On iOS non-Safari browsers, window.print() is a no-op regardless,
       // so skip straight to the PDF download fallback there.
-      if (isIOSNonSafariBrowser()) {
+      if (shouldUsePdfFallback()) {
         downloadSheetMusicPdf(visibleCalls);
         return;
       }

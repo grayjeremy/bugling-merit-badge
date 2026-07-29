@@ -87,6 +87,16 @@ automatically pauses any recording that was still playing.
    that image inside the practice modal automatically. Calls without a
    matching image will keep showing "Sheet music not yet available."
    instead of a broken image.
+5. Re-generate `images/sheet-music-data.js` (requires Python + Pillow:
+   `pip install pillow`):
+   ```
+   python tools/generate-sheet-music-data.py
+   ```
+   This file is a checked-in, pre-baked copy of every sheet music image
+   (as a true-color PNG data URI) that the PDF-download fallback uses —
+   see "Printing a sheet music practice packet" below for why it's needed.
+   Forgetting this step just means a newly added image won't show up in
+   downloaded PDFs (it still displays fine on-screen) until you run it.
 
 ## How to publish with GitHub Pages
 
@@ -151,8 +161,16 @@ or clear the filter/search first to print all 15.
   instead of printing an empty page.
 * **iOS/iPadOS exception:** same as the sign-off sheet above — on
   non-Safari iOS/iPadOS browsers this button automatically downloads a
-  multi-page PDF packet (one page per call) instead of opening a print
-  dialog.
+  multi-page PDF packet (multiple calls flow onto the same page where they
+  fit) instead of opening a print dialog.
+* The downloaded PDF gets its images from `images/sheet-music-data.js`
+  (see "How to add sheet music images" above) rather than loading the PNG
+  files directly. This is required for two reasons: (1) the source PNGs
+  are saved in a palette/indexed-color format that browsers' PDF-building
+  libraries can render as solid black blocks, and (2) when this site is
+  opened directly from disk (`file://` instead of a web server), browsers
+  block the page from reading an image's pixels back out at all. Baking
+  each image into a plain `.js` file sidesteps both issues.
 
 ## Licensing for audio recordings
 
