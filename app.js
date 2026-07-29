@@ -716,12 +716,6 @@
     return cleaned ? "-" + cleaned.toLowerCase() : "";
   }
 
-  function drawWrappedText(doc, text, x, y, maxWidth, lineHeight) {
-    var lines = doc.splitTextToSize(text, maxWidth);
-    doc.text(lines, x, y);
-    return y + lines.length * lineHeight;
-  }
-
   // Builds the sign-off sheet as a jsPDF document (text/lines only — no
   // images needed), mirroring the on-screen/print-CSS layout.
   function buildSignOffPdfDoc() {
@@ -827,50 +821,85 @@
     var pageWidth = 8.5;
     var pageHeight = 11;
     var marginX = 0.6;
+    var marginTop = 0.7;
+    var marginBottom = 0.6;
     var contentWidth = pageWidth - marginX * 2;
+    var maxImgHeight = 4.2; // matches .print-music-img max-height in styles.css
 
     doc.setFont("times", "bold");
     doc.setFontSize(16);
-    doc.text("Bugling Merit Badge \u2014 Sheet Music Packet", pageWidth / 2, 0.8, { align: "center" });
+    doc.text("Bugling Merit Badge \u2014 Sheet Music Packet", pageWidth / 2, marginTop, { align: "center" });
     doc.setFont("times", "normal");
     doc.setFontSize(11);
     doc.text(
       calls.length + " of " + BUGLE_CALLS.length +
         " calls included, based on the filter and search that were active when you printed.",
       pageWidth / 2,
-      1.1,
+      marginTop + 0.3,
       { align: "center", maxWidth: contentWidth }
     );
 
+    // Flows calls one after another on the same page (like the on-screen
+    // print packet), only starting a new page when the next call's block
+    // wouldn't fit in the remaining space — rather than forcing one call
+    // per page.
+    var y = marginTop + 0.65;
+
     calls.forEach(function (call) {
-      doc.addPage();
-      var y = 0.8;
+      doc.setFont("times", "normal");
+      doc.setFontSize(10.5);
+      var purposeLines = doc.splitTextToSize(call.purpose, contentWidth);
+      var purposeHeight = purposeLines.length * 0.18;
+      var titleHeight = 0.3;
+
+      var imgInfo = images[call.id];
+      var imgWidth = contentWidth;
+      var imgHeight;
+      if (imgInfo) {
+        imgHeight = (imgWidth * imgInfo.height) / imgInfo.width;
+        if (imgHeight > maxImgHeight) {
+          imgHeight = maxImgHeight;
+          imgWidth = (imgHeight * imgInfo.width) / imgInfo.height;
+        }
+      } else {
+        imgHeight = 0.2; // just the "not yet available" message line
+      }
+
+      var blockHeight = titleHeight + purposeHeight + 0.15 + imgHeight + 0.45;
+
+      // Only force a page break if this block doesn't fit AND we're not
+      // already at the top of a fresh page (avoids an infinite loop for a
+      // single oversized block, which will just overflow the page instead).
+      if (y + blockHeight > pageHeight - marginBottom && y > marginTop + 0.1) {
+        doc.addPage();
+        y = marginTop;
+      }
+
       doc.setFont("times", "bold");
       doc.setFontSize(14);
       doc.text(call.number + ". " + call.name, marginX, y);
-      y += 0.3;
+      y += titleHeight;
 
       doc.setFont("times", "normal");
       doc.setFontSize(10.5);
-      y = drawWrappedText(doc, call.purpose, marginX, y, contentWidth, 0.18);
-      y += 0.2;
+      doc.text(purposeLines, marginX, y);
+      y += purposeHeight + 0.15;
 
-      var imgInfo = images[call.id];
       if (imgInfo) {
-        var maxW = contentWidth;
-        var maxH = pageHeight - y - 0.6;
-        var wIn = maxW;
-        var hIn = (wIn * imgInfo.height) / imgInfo.width;
-        if (hIn > maxH) {
-          hIn = maxH;
-          wIn = (hIn * imgInfo.width) / imgInfo.height;
-        }
-        var xIn = marginX + (maxW - wIn) / 2;
-        doc.addImage(imgInfo.dataUrl, "PNG", xIn, y, wIn, hIn);
+        var xIn = marginX + (contentWidth - imgWidth) / 2;
+        doc.addImage(imgInfo.dataUrl, "PNG", xIn, y, imgWidth, imgHeight);
       } else {
         doc.setFont("times", "italic");
         doc.text("Sheet music not yet available for this call.", marginX, y);
       }
+      y += imgHeight;
+
+      // Divider line between calls, matching the on-screen packet's
+      // border-bottom on each .print-music-item.
+      y += 0.15;
+      doc.setDrawColor(0);
+      doc.line(marginX, y, marginX + contentWidth, y);
+      y += 0.3;
     });
 
     return doc;
