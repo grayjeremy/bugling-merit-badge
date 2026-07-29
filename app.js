@@ -20,8 +20,7 @@
      `id` must stay unique and is used as the localStorage key + audio file
      base name and the sheet music image file base name. For audio, an MP3
      (id + ".mp3") is used first if present; otherwise the app falls back to
-     a WAV (id + ".wav"). For images, an SVG (id + ".svg") is used first if
-     present; otherwise the app falls back to a PNG (id + ".png").
+     a WAV (id + ".wav"). For images, a PNG (id + ".png") is used.
      ------------------------------------------------------------------------ */
   var BUGLE_CALLS = [
     {
@@ -248,7 +247,7 @@
   // Cache of which sheet music image format is available for each call, so
   // the print-music button can build its packet synchronously (see note
   // above buildPrintMusicSheet for why this matters on iOS).
-  // Values: "svg", "png", "none", or undefined (not checked yet).
+  // Values: "png", "none", or undefined (not checked yet).
   var sheetMusicAvailability = {};
 
   /* ------------------------------------------------------------------------
@@ -427,7 +426,6 @@
   function buildSheetMusicDisplay(call, container) {
     container.innerHTML = "";
 
-    var svgSrc = "images/" + call.id + ".svg";
     var pngSrc = "images/" + call.id + ".png";
 
     var img = document.createElement("img");
@@ -440,23 +438,16 @@
     missingMsg.textContent = "Sheet music not yet available.";
     missingMsg.hidden = true;
 
-    // Prefer an SVG version of the sheet music if one exists. If the SVG
-    // is missing, fall back to trying the PNG before giving up and showing
-    // a friendly "not yet available" message instead of a broken image.
-    var triedPngFallback = false;
+    // If the PNG is missing, give up and show a friendly "not yet
+    // available" message instead of a broken image.
     img.addEventListener("error", function () {
-      if (!triedPngFallback) {
-        triedPngFallback = true;
-        img.src = pngSrc;
-        return;
-      }
       img.hidden = true;
       missingMsg.hidden = false;
     });
     img.addEventListener("load", function () {
       img.hidden = false;
     });
-    img.src = svgSrc;
+    img.src = pngSrc;
 
     container.appendChild(img);
     container.appendChild(missingMsg);
@@ -1052,12 +1043,7 @@
     if (dataUri) {
       return dataUriToImageInfo(dataUri);
     }
-    return loadImageAsDataUrl("images/" + callId + ".svg").then(function (info) {
-      if (info) {
-        return info;
-      }
-      return loadImageAsDataUrl("images/" + callId + ".png");
-    });
+    return loadImageAsDataUrl("images/" + callId + ".png");
   }
 
   function downloadSheetMusicPdf(calls) {
@@ -1214,8 +1200,8 @@
      8b. PRINTABLE SHEET MUSIC PACKET (currently filtered/searched calls)
      ------------------------------------------------------------------------ */
 
-  // Quietly checks, in the background, which sheet music image format
-  // (SVG, PNG, or none) exists for every call, and caches the result in
+  // Quietly checks, in the background, whether a sheet music image (PNG)
+  // exists for every call, and caches the result in
   // sheetMusicAvailability. This runs once during startup so that by the
   // time a Scout taps "Print Sheet Music", the answer is already known and
   // the print packet can be built synchronously.
@@ -1231,19 +1217,13 @@
         return; // already known
       }
       var probe = new Image();
-      var triedPngFallback = false;
       probe.addEventListener("load", function () {
-        sheetMusicAvailability[call.id] = triedPngFallback ? "png" : "svg";
+        sheetMusicAvailability[call.id] = "png";
       });
       probe.addEventListener("error", function () {
-        if (!triedPngFallback) {
-          triedPngFallback = true;
-          probe.src = "images/" + call.id + ".png";
-          return;
-        }
         sheetMusicAvailability[call.id] = "none";
       });
-      probe.src = "images/" + call.id + ".svg";
+      probe.src = "images/" + call.id + ".png";
     });
   }
 
@@ -1280,11 +1260,11 @@
 
       var availability = sheetMusicAvailability[call.id];
 
-      if (availability === "svg" || availability === "png") {
+      if (availability === "png") {
         var img = document.createElement("img");
         img.className = "print-music-img";
         img.alt = call.name + " sheet music";
-        img.src = "images/" + call.id + "." + availability;
+        img.src = "images/" + call.id + ".png";
         item.appendChild(img);
       } else if (availability === "none") {
         // Confirmed (by preloadSheetMusicAvailability) that no image
@@ -1295,11 +1275,11 @@
         // hasn't finished yet for this call. Rather than assume it's
         // missing (which would wrongly show "not yet available" for a
         // call that does have an image — the exact bug this replaced),
-        // try loading it live here: SVG first, falling back to PNG, and
-        // only falling back to the "missing" message if both fail. The
-        // browser's print pipeline waits for in-flight <img> loads before
-        // rendering the printed page, so this resolves before printing
-        // completes even though it's technically async.
+        // try loading it live here, only falling back to the "missing"
+        // message if it fails. The browser's print pipeline waits for
+        // in-flight <img> loads before rendering the printed page, so
+        // this resolves before printing completes even though it's
+        // technically async.
         appendSheetMusicImageWithFallback(item, call);
       }
 
@@ -1317,31 +1297,25 @@
     item.appendChild(missingMsg);
   }
 
-  // Adds an <img> that tries images/<id>.svg first and falls back to
-  // images/<id>.png on error, replacing itself with the standard "missing"
-  // message if neither exists. Used when sheetMusicAvailability doesn't
-  // yet have an answer for this call (see buildPrintMusicSheet).
+  // Adds an <img> that tries images/<id>.png, replacing itself with the
+  // standard "missing" message if it doesn't exist. Used when
+  // sheetMusicAvailability doesn't yet have an answer for this call (see
+  // buildPrintMusicSheet).
   function appendSheetMusicImageWithFallback(item, call) {
     var img = document.createElement("img");
     img.className = "print-music-img";
     img.alt = call.name + " sheet music";
-    var triedPngFallback = false;
     img.addEventListener("load", function () {
-      sheetMusicAvailability[call.id] = triedPngFallback ? "png" : "svg";
+      sheetMusicAvailability[call.id] = "png";
     });
     img.addEventListener("error", function () {
-      if (!triedPngFallback) {
-        triedPngFallback = true;
-        img.src = "images/" + call.id + ".png";
-        return;
-      }
       sheetMusicAvailability[call.id] = "none";
       if (img.parentNode === item) {
         item.removeChild(img);
       }
       appendMissingSheetMusicMessage(item, call);
     });
-    img.src = "images/" + call.id + ".svg";
+    img.src = "images/" + call.id + ".png";
     item.appendChild(img);
   }
 

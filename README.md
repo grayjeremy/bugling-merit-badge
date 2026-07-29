@@ -152,7 +152,7 @@ filter and search — so a Scout can print just the calls they're working on,
 or clear the filter/search first to print all 15.
 
 * Each call in the packet shows its name and purpose above the sheet music
-  image, using the same SVG-preferred/PNG-fallback image logic as the
+  image, using the same PNG image logic as the
   on-screen cards and the practice modal.
 * If a call doesn't have a sheet music image yet, the packet prints a
   friendly "Sheet music not yet available for this call" message instead of
