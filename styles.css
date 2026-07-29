@@ -169,6 +169,13 @@ textarea:focus-visible,
   background: rgba(253, 250, 241, 0.1);
 }
 
+.header-print-link:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  text-decoration-color: transparent;
+  background: none;
+}
+
 /* ==========================================================================
    Layout / Cards
    ========================================================================== */

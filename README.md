@@ -125,6 +125,13 @@ column for the counselor to write in their initials by hand.
 * To get a PDF file, choose **"Save as PDF"** (or "Microsoft Print to PDF")
   as the destination/printer in that dialog instead of a physical printer.
 * To get a paper copy, just choose your printer as usual.
+* **iOS/iPadOS exception:** Apple only allows Safari itself to open the
+  print dialog — Edge, Chrome, Firefox, and other browsers on iOS/iPadOS
+  cannot, even though they display the same web page. The app detects this
+  automatically and swaps the button to **"Download Sign-Off Sheet
+  (PDF)"**, which generates and downloads a PDF directly (using the
+  [jsPDF](https://github.com/parallax/jsPDF) library, loaded from a CDN
+  only when needed) instead of opening a print dialog.
 
 ## Printing a sheet music practice packet
 
@@ -142,6 +149,10 @@ or clear the filter/search first to print all 15.
   a broken image.
 * If no calls match the current filter/search, the button shows an alert
   instead of printing an empty page.
+* **iOS/iPadOS exception:** same as the sign-off sheet above — on
+  non-Safari iOS/iPadOS browsers this button automatically downloads a
+  multi-page PDF packet (one page per call) instead of opening a print
+  dialog.
 
 ## Licensing for audio recordings
 

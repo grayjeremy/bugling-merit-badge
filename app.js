@@ -600,6 +600,353 @@
   }
 
   /* ------------------------------------------------------------------------
+     7b. iOS NON-SAFARI BROWSER DETECTION
+     ------------------------------------------------------------------------ */
+
+  // On iOS/iPadOS, every browser (Edge, Chrome, Firefox, etc.) is required
+  // by Apple to run on the same WebKit engine as Safari, but only Safari
+  // itself is given access to the native print dialog. In Edge, Chrome, and
+  // similar apps on iOS, window.print() is silently a no-op — there is no
+  // error, the dialog just never appears. This is a platform limitation,
+  // not something a web page can fix directly, so instead we detect it and
+  // tell the Scout/leader how to print anyway (via the browser's Share
+  // sheet, which routes to iOS's real print system outside of WebKit).
+  function isIOSNonSafariBrowser() {
+    var ua = window.navigator.userAgent || "";
+    var isIOS =
+      /iPad|iPhone|iPod/.test(ua) ||
+      // iPadOS 13+ reports as "Macintosh" but, unlike a real Mac, supports touch.
+      (window.navigator.platform === "MacIntel" && window.navigator.maxTouchPoints > 1);
+    if (!isIOS) {
+      return false;
+    }
+    // Other iOS browsers still include "Safari" in their UA string, but also
+    // include their own token, which is what we key off of here.
+    return /EdgiOS|CriOS|FxiOS|OPiOS|Brave|DuckDuckGo|GSA/.test(ua);
+  }
+
+  // Relabels both print buttons (rather than leaving them saying "Print"
+  // when window.print() won't work) so it's clear a PDF download will
+  // happen instead of a print dialog opening.
+  function relabelPrintButtonsIfPdfFallback() {
+    if (!isIOSNonSafariBrowser()) {
+      return;
+    }
+    var explanation =
+      "This browser on iOS/iPadOS can't open the print dialog directly " +
+      "(an Apple limitation for all non-Safari browsers), so this " +
+      "downloads a PDF instead.";
+    els.printBtn.textContent = "Download Sign-Off Sheet (PDF)";
+    els.printBtn.title = explanation;
+    els.printMusicBtn.title = explanation;
+    els.printMusicBtn.setAttribute(
+      "aria-label",
+      "Download sheet music PDF for the calls currently shown"
+    );
+  }
+
+  /* ------------------------------------------------------------------------
+     7c. PDF GENERATION FALLBACK (for browsers where window.print() is a
+     no-op, i.e. non-Safari browsers on iOS/iPadOS — see above)
+     ------------------------------------------------------------------------ */
+
+  var JSPDF_SCRIPT_URL = "https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js";
+  var jsPdfLoadPromise = null;
+
+  // Lazily loads the jsPDF library from a CDN, only when a PDF actually
+  // needs to be generated (desktop/Safari users who can use window.print()
+  // never pay this cost). Returns a Promise that resolves once
+  // window.jspdf.jsPDF is available.
+  function loadJsPdfLibrary() {
+    if (window.jspdf && window.jspdf.jsPDF) {
+      return Promise.resolve();
+    }
+    if (jsPdfLoadPromise) {
+      return jsPdfLoadPromise;
+    }
+    jsPdfLoadPromise = new Promise(function (resolve, reject) {
+      var script = document.createElement("script");
+      script.src = JSPDF_SCRIPT_URL;
+      script.addEventListener("load", function () {
+        resolve();
+      });
+      script.addEventListener("error", function () {
+        jsPdfLoadPromise = null; // allow retrying on a later click
+        reject(new Error("Could not load the PDF library."));
+      });
+      document.head.appendChild(script);
+    });
+    return jsPdfLoadPromise;
+  }
+
+  // Rasterizes an on-disk image (SVG or PNG) to a PNG data URL via a hidden
+  // canvas, so it can be embedded with jsPDF's addImage (which needs a
+  // raster format, not SVG). Resolves to null if the image can't be loaded.
+  function loadImageAsPngDataUrl(src) {
+    return new Promise(function (resolve) {
+      var img = new Image();
+      img.addEventListener("load", function () {
+        try {
+          var canvas = document.createElement("canvas");
+          canvas.width = img.naturalWidth || 800;
+          canvas.height = img.naturalHeight || 600;
+          var ctx = canvas.getContext("2d");
+          ctx.fillStyle = "#fff";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve({
+            dataUrl: canvas.toDataURL("image/png"),
+            width: canvas.width,
+            height: canvas.height
+          });
+        } catch (err) {
+          resolve(null); // e.g. canvas security error
+        }
+      });
+      img.addEventListener("error", function () {
+        resolve(null);
+      });
+      img.src = src;
+    });
+  }
+
+  // Turns "Scout" text into a safe-ish file name fragment.
+  function pdfFileNamePart(text) {
+    var cleaned = (text || "").trim().replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "");
+    return cleaned ? "-" + cleaned.toLowerCase() : "";
+  }
+
+  function drawWrappedText(doc, text, x, y, maxWidth, lineHeight) {
+    var lines = doc.splitTextToSize(text, maxWidth);
+    doc.text(lines, x, y);
+    return y + lines.length * lineHeight;
+  }
+
+  // Builds the sign-off sheet as a jsPDF document (text/lines only — no
+  // images needed), mirroring the on-screen/print-CSS layout.
+  function buildSignOffPdfDoc() {
+    var JsPDF = window.jspdf.jsPDF;
+    var doc = new JsPDF({ unit: "in", format: "letter" });
+    var pageWidth = 8.5;
+    var marginX = 0.6;
+    var contentWidth = pageWidth - marginX * 2;
+    var y = 0.7;
+
+    doc.setFont("times", "bold");
+    doc.setFontSize(16);
+    doc.text("Bugling Merit Badge \u2014 Bugle Calls Sign-Off Sheet", pageWidth / 2, y, { align: "center" });
+    y += 0.4;
+
+    doc.setFontSize(11);
+    var infoRows = [
+      ["Scout Name", state.scoutName || "\u2014"],
+      ["Unit Number", state.unitNumber || "\u2014"],
+      ["Counselor Name", state.counselorName || "\u2014"],
+      ["Date Started", state.dateStarted || "\u2014"]
+    ];
+    infoRows.forEach(function (row) {
+      doc.setFont("times", "bold");
+      doc.text(row[0] + ":", marginX, y);
+      doc.setFont("times", "normal");
+      doc.text(row[1], marginX + 1.7, y);
+      y += 0.05;
+      doc.line(marginX, y, marginX + contentWidth, y);
+      y += 0.24;
+    });
+    y += 0.15;
+
+    // Calls table: Bugle Call | Played | Explained | Counselor Initials
+    var colWidths = [3.5, 1.0, 1.1, 1.7];
+    var colX = [marginX];
+    for (var i = 0; i < colWidths.length; i++) {
+      colX.push(colX[i] + colWidths[i]);
+    }
+    var rowHeight = 0.28;
+
+    function drawTableRow(cells, isHeader) {
+      doc.setFont("times", isHeader ? "bold" : "normal");
+      doc.setFontSize(isHeader ? 10 : 10);
+      var textY = y + rowHeight * 0.68;
+      cells.forEach(function (cellText, colIndex) {
+        var align = colIndex === 0 ? "left" : "center";
+        var textX = align === "left" ? colX[colIndex] + 0.08 : (colX[colIndex] + colX[colIndex + 1]) / 2;
+        doc.text(String(cellText), textX, textY, { align: align });
+      });
+      y += rowHeight;
+      doc.line(marginX, y, marginX + contentWidth, y);
+    }
+
+    var tableTop = y;
+    doc.line(marginX, y, marginX + contentWidth, y);
+    drawTableRow(["Bugle Call", "Played", "Explained", "Counselor Initials"], true);
+    BUGLE_CALLS.forEach(function (call) {
+      var c = state.calls[call.id];
+      drawTableRow([
+        call.number + ". " + call.name,
+        c.played ? "Yes" : "",
+        c.explained ? "Yes" : "",
+        ""
+      ], false);
+    });
+    var tableBottom = y;
+    // Vertical grid lines around the table.
+    colX.forEach(function (x) {
+      doc.line(x, tableTop, x, tableBottom);
+    });
+    y += 0.3;
+
+    doc.setFont("times", "bold");
+    doc.setFontSize(12);
+    doc.text("Counselor Notes", marginX, y);
+    y += 0.2;
+    for (var lineIdx = 0; lineIdx < 3; lineIdx++) {
+      y += 0.22;
+      doc.line(marginX, y, marginX + contentWidth, y);
+    }
+    y += 0.5;
+
+    doc.setFont("times", "normal");
+    doc.setFontSize(10);
+    var sigWidth = (contentWidth - 0.4) / 2;
+    doc.line(marginX, y, marginX + sigWidth, y);
+    doc.line(marginX + sigWidth + 0.4, y, marginX + sigWidth + 0.4 + sigWidth, y);
+    y += 0.16;
+    doc.text("Counselor Signature", marginX, y);
+    doc.text("Completion Date", marginX + sigWidth + 0.4, y);
+
+    return doc;
+  }
+
+  // Builds the sheet music packet as a jsPDF document: one page per call,
+  // with its name/purpose text plus its rasterized sheet music image
+  // (images map is call.id -> {dataUrl, width, height} | null, preloaded
+  // via loadImageAsPngDataUrl before this is called).
+  function buildSheetMusicPdfDoc(calls, images) {
+    var JsPDF = window.jspdf.jsPDF;
+    var doc = new JsPDF({ unit: "in", format: "letter" });
+    var pageWidth = 8.5;
+    var pageHeight = 11;
+    var marginX = 0.6;
+    var contentWidth = pageWidth - marginX * 2;
+
+    doc.setFont("times", "bold");
+    doc.setFontSize(16);
+    doc.text("Bugling Merit Badge \u2014 Sheet Music Packet", pageWidth / 2, 0.8, { align: "center" });
+    doc.setFont("times", "normal");
+    doc.setFontSize(11);
+    doc.text(
+      calls.length + " of " + BUGLE_CALLS.length +
+        " calls included, based on the filter and search that were active when you printed.",
+      pageWidth / 2,
+      1.1,
+      { align: "center", maxWidth: contentWidth }
+    );
+
+    calls.forEach(function (call) {
+      doc.addPage();
+      var y = 0.8;
+      doc.setFont("times", "bold");
+      doc.setFontSize(14);
+      doc.text(call.number + ". " + call.name, marginX, y);
+      y += 0.3;
+
+      doc.setFont("times", "normal");
+      doc.setFontSize(10.5);
+      y = drawWrappedText(doc, call.purpose, marginX, y, contentWidth, 0.18);
+      y += 0.2;
+
+      var imgInfo = images[call.id];
+      if (imgInfo) {
+        var maxW = contentWidth;
+        var maxH = pageHeight - y - 0.6;
+        var wIn = maxW;
+        var hIn = (wIn * imgInfo.height) / imgInfo.width;
+        if (hIn > maxH) {
+          hIn = maxH;
+          wIn = (hIn * imgInfo.width) / imgInfo.height;
+        }
+        var xIn = marginX + (maxW - wIn) / 2;
+        doc.addImage(imgInfo.dataUrl, "PNG", xIn, y, wIn, hIn);
+      } else {
+        doc.setFont("times", "italic");
+        doc.text("Sheet music not yet available for this call.", marginX, y);
+      }
+    });
+
+    return doc;
+  }
+
+  // Shows a busy state on a print/download button while a PDF is being
+  // generated, since (unlike window.print()) this involves a network
+  // fetch for the library plus image loading and can take a moment.
+  function setButtonBusy(btn, isBusy, busyLabel) {
+    if (isBusy) {
+      btn.dataset.originalLabel = btn.textContent;
+      btn.dataset.originalDisabled = btn.disabled ? "true" : "false";
+      if (busyLabel) {
+        btn.textContent = busyLabel;
+      }
+      btn.disabled = true;
+    } else {
+      if (btn.dataset.originalLabel !== undefined) {
+        btn.textContent = btn.dataset.originalLabel;
+        delete btn.dataset.originalLabel;
+      }
+      btn.disabled = false;
+      delete btn.dataset.originalDisabled;
+    }
+  }
+
+  function showPdfErrorAlert() {
+    window.alert(
+      "Sorry, the PDF could not be generated (check your internet " +
+      "connection, since this needs to briefly download a small PDF " +
+      "library). Please try again, or open this page in Safari and use " +
+      "its normal print/Save as PDF option instead."
+    );
+  }
+
+  function downloadSignOffPdf() {
+    setButtonBusy(els.printBtn, true, "Preparing PDF\u2026");
+    loadJsPdfLibrary().then(function () {
+      var doc = buildSignOffPdfDoc();
+      doc.save("bugling-sign-off-sheet" + pdfFileNamePart(state.scoutName) + ".pdf");
+    }).catch(function (err) {
+      console.warn("Bugling app: could not generate sign-off PDF.", err);
+      showPdfErrorAlert();
+    }).then(function () {
+      setButtonBusy(els.printBtn, false);
+    });
+  }
+
+  function downloadSheetMusicPdf(calls) {
+    setButtonBusy(els.printMusicBtn, true);
+    loadJsPdfLibrary().then(function () {
+      return Promise.all(calls.map(function (call) {
+        var availability = sheetMusicAvailability[call.id];
+        if (availability !== "svg" && availability !== "png") {
+          return { id: call.id, info: null };
+        }
+        return loadImageAsPngDataUrl("images/" + call.id + "." + availability).then(function (info) {
+          return { id: call.id, info: info };
+        });
+      }));
+    }).then(function (results) {
+      var images = {};
+      results.forEach(function (result) {
+        images[result.id] = result.info;
+      });
+      var doc = buildSheetMusicPdfDoc(calls, images);
+      doc.save("bugling-sheet-music-packet.pdf");
+    }).catch(function (err) {
+      console.warn("Bugling app: could not generate sheet music PDF.", err);
+      showPdfErrorAlert();
+    }).then(function () {
+      setButtonBusy(els.printMusicBtn, false);
+    });
+  }
+
+  /* ------------------------------------------------------------------------
      8. PRINTABLE SIGN-OFF SHEET
      ------------------------------------------------------------------------ */
 
@@ -710,6 +1057,12 @@
   function initPrintButton() {
     els.printBtn.addEventListener("click", function () {
       updatePrintHeaderInfo();
+      // On iOS non-Safari browsers, window.print() silently does nothing
+      // (see isIOSNonSafariBrowser above), so download a PDF instead.
+      if (isIOSNonSafariBrowser()) {
+        downloadSignOffPdf();
+        return;
+      }
       els.printMusicSheet.classList.remove("print-active");
       els.printSheet.classList.add("print-active");
       window.print();
@@ -826,7 +1179,14 @@
 
       // Everything below must run synchronously (no waiting on Promises)
       // so that window.print() stays inside this click event's user
-      // gesture — required for the print dialog to open on iOS.
+      // gesture — required for the print dialog to open on iOS Safari.
+      // On iOS non-Safari browsers, window.print() is a no-op regardless,
+      // so skip straight to the PDF download fallback there.
+      if (isIOSNonSafariBrowser()) {
+        downloadSheetMusicPdf(visibleCalls);
+        return;
+      }
+
       buildPrintMusicSheet(visibleCalls);
       els.printSheet.classList.remove("print-active");
       els.printMusicSheet.classList.add("print-active");
@@ -890,6 +1250,7 @@
     initPrintButton();
     initPrintMusicButton();
     initResetButton();
+    relabelPrintButtonsIfPdfFallback();
     preloadSheetMusicAvailability();
     renderEverything();
   }
